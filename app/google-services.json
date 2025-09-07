@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "353773196146",
+    "project_id": "sheria-app-113b2",
+    "storage_bucket": "sheria-app-113b2.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:353773196146:android:02045a9c511499607c43eb",
+        "android_client_info": {
+          "package_name": "com.sam.sheriaapp"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyCyU4SPU59Ws6YWrS3mSAoc556kN_vNQhM"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
