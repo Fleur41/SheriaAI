@@ -21,20 +21,20 @@ import java.io.FileOutputStream
 
 @HiltViewModel
 class AccountViewModel @Inject constructor(
-    private val repository: AccountRepository,
-
+    private val repository: AccountRepository
 ) : ViewModel() {
     private val _state = MutableStateFlow(AccountState())
     val state = _state.asStateFlow()
 
     private var allAccounts = emptyList<Account>()
+
     init {
         loadAccounts()
     }
+
     private fun loadAccounts() {
         viewModelScope.launch(Dispatchers.IO) {
             _state.value = _state.value.copy(isLoading = true)
-
             try {
                 val accounts = listOf(SampleAccounts.lucasBennett, SampleAccounts.ethanCarter)
                 allAccounts = accounts
@@ -52,26 +52,7 @@ class AccountViewModel @Inject constructor(
             }
         }
     }
-//    private fun loadAccounts() {
-//        viewModelScope.launch(Dispatchers.IO) {
-//            _state.value = _state.value.copy(isLoading = true)
-//
-//            try {
-//                val accounts = listOf(SampleAccounts.lucasBennett, SampleAccounts.ethanCarter)
-//
-//                _state.value = AccountState(
-//                    accounts = accounts,
-//                    currentAccountIndex = 0,
-//                    isLoading = false
-//                )
-//            } catch (e: Exception) {
-//                _state.value = AccountState(
-//                    isLoading = false,
-//                    error = e.message ?: "Failed to load accounts"
-//                )
-//            }
-//        }
-//    }
+
     fun searchAccounts(query: String) {
         if (query.isEmpty()) {
             _state.value = _state.value.copy(
@@ -100,33 +81,43 @@ class AccountViewModel @Inject constructor(
     }
 
     fun switchAccount(index: Int) {
-        if (index in _state.value.accounts.indices) {
+        if (index in _state.value.filteredAccounts.indices) {
             _state.value = _state.value.copy(currentAccountIndex = index)
         }
     }
 
     fun nextAccount() {
-        val nextIndex = (_state.value.currentAccountIndex + 1) % _state.value.accounts.size
+        val nextIndex = (_state.value.currentAccountIndex + 1) % _state.value.filteredAccounts.size
         switchAccount(nextIndex)
     }
 
     fun previousAccount() {
         val prevIndex = (_state.value.currentAccountIndex - 1).takeIf { it >= 0 }
-            ?: (_state.value.accounts.size - 1)
+            ?: (_state.value.filteredAccounts.size - 1)
         switchAccount(prevIndex)
     }
 
-    fun updateProfileImage(imageUri: String){
+    // UPDATED: Now accepts Base64 string instead of file path
+    private fun updateProfileImage(base64Image: String) {
         viewModelScope.launch {
             val currentAccount = _state.value.currentAccount
-            if (currentAccount != null){
-                try {// Update repository
-                    repository.updateProfileImage(currentAccount.id, imageUri)
+            if (currentAccount != null) {
+                try {
+                    println("DEBUG: 🎯 Starting profile image update for account: ${currentAccount.id}")
 
-                    // Update both allAccounts and filteredAccounts
+                    // Try to update repository, but continue even if it fails
+                    try {
+                        repository.updateProfileImage(currentAccount.id, base64Image)
+                        println("DEBUG: ✅ Repository update completed")
+                    } catch (e: Exception) {
+                        println("DEBUG: ⚠️ Repository update failed: ${e.message}. Continuing with UI update...")
+                        // Don't return - continue with local state update
+                    }
+
+                    // Always update local state for immediate UI feedback
                     val updatedAccounts = allAccounts.map { account ->
                         if (account.id == currentAccount.id) {
-                            account.copy(profileImageUri = imageUri)
+                            account.copy(profileImageUri = base64Image)
                         } else {
                             account
                         }
@@ -134,7 +125,7 @@ class AccountViewModel @Inject constructor(
 
                     val updatedFilteredAccounts = _state.value.filteredAccounts.map { account ->
                         if (account.id == currentAccount.id) {
-                            account.copy(profileImageUri = imageUri)
+                            account.copy(profileImageUri = base64Image)
                         } else {
                             account
                         }
@@ -144,59 +135,97 @@ class AccountViewModel @Inject constructor(
                     _state.value = _state.value.copy(
                         accounts = updatedAccounts,
                         filteredAccounts = updatedFilteredAccounts,
-                        //currentAccountIndex = updatedAccounts.indexOf(currentAccount)
+                        isLoading = false,
+                        error = null
                     )
+
+                    println("DEBUG: ✅ UI state updated successfully")
+                    println("DEBUG: ✅ New profileImageUri length: ${_state.value.currentAccount?.profileImageUri?.length}")
+
                 } catch (e: Exception) {
-                    _state.value = _state.value.copy(error = e.message ?: "Failed to update profile image")
+                    println("DEBUG: ❌ Error in updateProfileImage: ${e.message}")
+                    _state.value = _state.value.copy(
+                        error = "Failed to update profile image: ${e.message}",
+                        isLoading = false
+                    )
                 }
+            } else {
+                println("DEBUG: ❌ No current account found")
             }
         }
-
     }
-//    fun updateProfileImage(imageUri: String) {
-//        viewModelScope.launch {
-////            println("DEBUG: Updating profile with: $imageUri")
-//            val currentAccount = _state.value.currentAccount
-//            if (currentAccount != null) {
-//                try {
-//                    repository.updateProfileImage(currentAccount.id, imageUri)
-//                    val updatedAccounts = _state.value.accounts.map { account ->
-//                        if (account.id == currentAccount.id) {
-//                            println("DEBUG: Account updated with new image")
-//                            account.copy(profileImageUri = imageUri)
-//                        } else {
-//                            account
-//                        }
-//                    }
-//                    _state.value = _state.value.copy(accounts = updatedAccounts)
-//                    println("DEBUG: State updated successfully")
-//                } catch (e: Exception) {
-//                    println("DEBUG: Error updating profile: ${e.message}")
-//                    _state.value = _state.value.copy(error = e.message ?: "Failed to update profile image")
-//                }
-//            }
-//        }
-//    }
 
-
-
-
-    // Update this function to handle URI instead of String
+    // UPDATED: Simplified using new ImageUtils.processSelectedImage()
     fun handleImageSelection(context: Context, uri: Uri) {
         viewModelScope.launch {
-            _state.value = _state.value.copy(isLoading = true, error = null) //Added this line
+            _state.value = _state.value.copy(isLoading = true, error = null)
             try {
-                val filePath = ImageUtils.copyImageToAppStorage(context, uri)
-                updateProfileImage(filePath)
+                println("DEBUG: Starting image processing for URI: $uri")
+
+                // Use the new simplified utility function
+                val base64Image = ImageUtils.processSelectedImage(context, uri)
+
+                if (base64Image != null) {
+                    println("DEBUG: ✅ Image processing successful, Base64 length: ${base64Image.length}")
+                    println("DEBUG: ✅ First 50 chars: ${base64Image.take(50)}...")
+                    updateProfileImage(base64Image)
+                    //println("DEBUG: Image processing successful, Base64 length: ${base64Image.length}")
+
+
+                    // Optional: Clean up old profile images
+                    ImageUtils.cleanupOldProfileImages(context, 3)
+                } else {
+                    println("DEBUG: ❌ Image processing returned null")
+                    throw Exception("Failed to process image or image too large (max 1MB)")
+                }
+
             } catch (e: Exception) {
+                val errorMsg = "Failed to process image: ${e.message}"
+                println("DEBUG: $errorMsg")
                 _state.value = _state.value.copy(
-                    error = "Failed to process image: ${e.message}",
+                    error = errorMsg,
                     isLoading = false
                 )
             }
         }
     }
 
+    // NEW: Alternative method if you want to keep file-based storage as backup
+    fun handleImageSelectionAsFile(context: Context, uri: Uri) {
+        viewModelScope.launch {
+            _state.value = _state.value.copy(isLoading = true, error = null)
+            try {
+                println("DEBUG: Starting file-based image processing for URI: $uri")
+
+                // Convert URI to byte array first
+                val byteArray = ImageUtils.uriToByteArray(context, uri)
+                if (byteArray != null) {
+                    // Compress the image
+                    val compressedImage = ImageUtils.compressImage(byteArray)
+
+                    // Save to file
+                    val filePath = ImageUtils.saveImageToFile(context, compressedImage)
+
+                    if (ImageUtils.doesFileExist(filePath)) {
+                        println("DEBUG: File created successfully: $filePath")
+                        updateProfileImage(filePath) // This will still work if your Account uses file paths
+                    } else {
+                        throw Exception("Failed to create image file")
+                    }
+                } else {
+                    throw Exception("Failed to read image data from URI")
+                }
+
+            } catch (e: Exception) {
+                val errorMsg = "Failed to process image as file: ${e.message}"
+                println("DEBUG: $errorMsg")
+                _state.value = _state.value.copy(
+                    error = errorMsg,
+                    isLoading = false
+                )
+            }
+        }
+    }
 }
 
 data class AccountState(
@@ -205,10 +234,8 @@ data class AccountState(
     val currentAccountIndex: Int = 0,
     val isLoading: Boolean = true,
     val error: String? = null
-){
+) {
     val currentAccount: Account? get() = filteredAccounts.getOrNull(currentAccountIndex)
-//    val currentAccount: Account? get() = accounts.getOrNull(currentAccountIndex)
     val totalAccounts: Int get() = filteredAccounts.size
-    //val totalAccounts: Int get() = accounts.size
     val isSearchActive: Boolean get() = filteredAccounts != accounts
 }

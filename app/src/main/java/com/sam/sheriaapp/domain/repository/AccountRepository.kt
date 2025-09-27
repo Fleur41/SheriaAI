@@ -10,7 +10,7 @@ import javax.inject.Inject
 interface AccountRepository {
     suspend fun getAllAccounts(): List<Account>
     suspend fun getAccountById(accountId: String): Account?
-    suspend fun updateProfileImage(accountId: String, imageUri: String)
+    suspend fun updateProfileImage(accountId: String, imageData: String)  //imageUri: String
     suspend fun updateAccount(account: Account)
     suspend fun deleteAccount(accountId: String)
 }
@@ -41,15 +41,17 @@ class AccountRepositoryImpl @Inject constructor(
         }
     }
 
-    override suspend fun updateProfileImage(accountId: String, imageUri: String) {
+    override suspend fun updateProfileImage(accountId: String, imageData: String) {
         try {
-            api.updateProfileImage(accountId, UpdateProfileImageRequest(imageUri))
+            api.updateProfileImage(accountId, UpdateProfileImageRequest(imageData))
             // Update local cache
-            dao.updateProfileImage(accountId, imageUri)
+            dao.updateProfileImage(accountId, imageData)
+            println("DEBUG: ✅ Local update successful (API temporarily disabled)")
         } catch (e: Exception) {
             // Update local cache if network fails
-            dao.updateProfileImage(accountId, imageUri)
-            throw e // Re-throw to handle in ViewModel
+            dao.updateProfileImage(accountId, imageData)
+            println("DEBUG: ⚠️ API failed but local update succeeded: ${e.message}")
+            //throw e // Re-throw to handle in ViewModel
         }
     }
 

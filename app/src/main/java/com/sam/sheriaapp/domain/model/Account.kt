@@ -16,6 +16,7 @@ data class Account(
     val phone: String,
     val address: String,
     val registrationDate: LocalDateTime,
+    //val profileImageUri: Any? = null,
     val profileImageUri: String? = null,
     val subscription: Subscription,
     val activities: List<Activity> = emptyList(),
